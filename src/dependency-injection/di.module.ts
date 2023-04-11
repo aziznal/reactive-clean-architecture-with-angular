@@ -5,14 +5,6 @@ import { todoData as todoData } from '@data';
 const providers: Provider[] = [
   // Data Source injections
   {
-    provide: todoData.dataSources.LocalTodoListDataSource,
-    useFactory: () => new todoData.dataSources.LocalTodoListDataSourceImpl(),
-  },
-  {
-    provide: todoData.dataSources.LocalTodoDataSource,
-    useFactory: () => new todoData.dataSources.LocalTodoDataSourceImpl(),
-  },
-  {
     provide: todoData.dataSources.RemoteTodoDataSource,
     useFactory: () => new todoData.dataSources.RemoteTodoDataSourceImpl(),
   },
@@ -20,16 +12,9 @@ const providers: Provider[] = [
   // Repository injections
   {
     provide: todoCore.repositories.TodoRepository,
-    useFactory: (
-      remoteDataSource: todoData.dataSources.RemoteTodoDataSource,
-      localTodoListDataSource: todoData.dataSources.LocalTodoListDataSource,
-      localDataSource: todoData.dataSources.LocalTodoDataSource,
-    ) => new todoData.repositories.TodoRepositoryImpl(remoteDataSource, localTodoListDataSource, localDataSource),
-    deps: [
-      todoData.dataSources.RemoteTodoDataSource,
-      todoData.dataSources.LocalTodoListDataSource,
-      todoData.dataSources.LocalTodoDataSource,
-    ],
+    useFactory: (remoteDataSource: todoData.dataSources.RemoteTodoDataSource) =>
+      new todoData.repositories.TodoRepositoryImpl(remoteDataSource),
+    deps: [todoData.dataSources.RemoteTodoDataSource],
   },
 
   // Usecase injections
