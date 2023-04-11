@@ -33,11 +33,15 @@ export class TodoDetailsSectionComponent implements OnChanges, CanDeactivateComp
   #init() {
     if (this.id === null || this.id === undefined) {
       alert('Invalid todo id');
-      this.router.navigateByUrl('/todos');
+      this.closed.emit();
     }
 
     this.state$ = this.getTodoByIdUsecase.execute(this.id).pipe(
       tap(state => {
+        if (!state.loading && state.data === null) {
+          this.closed.emit();
+        }
+
         if (state.error) {
           alert('Something went wrong. ' + state.error);
         }

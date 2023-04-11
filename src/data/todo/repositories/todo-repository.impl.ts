@@ -23,7 +23,7 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
   ) {}
 
   async loadAllTodos(): Promise<void> {
-    this.#emitTodoListState({ loading: true });
+    this.#emitTodoListState({ loading: true, error: null });
 
     const todos = await this.remoteTodoDataSource.getAllTodos();
 
@@ -54,46 +54,72 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
   }
 
   async create(todo: todoCore.entities.Todo): Promise<void> {
+    // local update
+    this.localTodoListDataSource.createToDo(todo);
+    this.#emitTodoListState({ data: this.localTodoListDataSource.getTodoList() });
+
     this.#emitTodoListState({ loading: true });
 
-    await this.remoteTodoDataSource.createTodo(todo);
+    await this.remoteTodoDataSource.createTodo(todo).catch(error => {
+      this.#emitTodoListState({ loading: false, error });
+      this.loadAllTodos();
+    });
 
-    this.localTodoListDataSource.createToDo(todo);
-
-    // local update
-    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
+    this.#emitTodoListState({ loading: false });
   }
 
   async update(todo: todoCore.entities.Todo): Promise<void> {
-    this.#emitTodoListState({ loading: true });
-
-    await this.remoteTodoDataSource.updateTodo(todo);
-
     // local update
     this.localTodoListDataSource.updateTodo(todo);
 
     this.localTodoDataSource.setTodoIfMatchesCurrentId(todo);
 
-    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
+    this.#emitTodoListState({ data: this.localTodoListDataSource.getTodoList() });
     this.#emitTodoState({ data: this.localTodoDataSource.getTodo() });
+
+    this.#emitTodoListState({ loading: true });
+
+    await this.remoteTodoDataSource.updateTodo(todo).catch(error => {
+      this.#emitTodoListState({ loading: false, error });
+      this.loadAllTodos();
+    });
+
+    this.#emitTodoListState({ loading: false });
   }
 
   async reorder(from: number, to: number): Promise<void> {
-    this.#emitTodoListState({ loading: true });
-    await this.remoteTodoDataSource.reorderTodo(from, to);
-
     // local update
     this.localTodoListDataSource.reorderTodo(from, to);
-    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
+    this.#emitTodoListState({ data: this.localTodoListDataSource.getTodoList() });
+
+    this.#emitTodoListState({ loading: true });
+
+    await this.remoteTodoDataSource.reorderTodo(from, to).catch(error => {
+      this.#emitTodoListState({ loading: false, error });
+
+      // reset local
+      this.loadAllTodos();
+    });
+
+    this.#emitTodoListState({ loading: false });
   }
 
   async delete(id: number): Promise<void> {
-    this.#emitTodoListState({ loading: true });
-    await this.remoteTodoDataSource.deleteTodo(id);
-
     // local update
     this.localTodoListDataSource.deleteTodo(id);
-    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
+    this.localTodoDataSource.deleteTodoIfMatchesCurrentId(id);
+
+    this.#emitTodoListState({ data: this.localTodoListDataSource.getTodoList() });
+    this.#emitTodoState({ data: this.localTodoDataSource.getTodo() });
+
+    this.#emitTodoListState({ loading: true });
+
+    await this.remoteTodoDataSource.deleteTodo(id).catch(error => {
+      this.#emitTodoListState({ loading: false, error });
+      this.loadAllTodos();
+    });
+
+    this.#emitTodoListState({ loading: false });
   }
 
   #emitTodoListState(newState: Partial<todoCore.repositories.TodoListState>) {
