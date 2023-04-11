@@ -1,8 +1,7 @@
 import { BehaviorSubject, Observable } from 'rxjs';
-
 import { todoCore } from '@core';
-
 import { RemoteTodoDataSource } from '../data-sources';
+import { LocalTodoListDataSource, LocalTodoDataSource } from '../data-sources';
 
 export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository {
   todoListState$ = new BehaviorSubject<todoCore.repositories.TodoListState>({
@@ -17,12 +16,29 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
     data: null,
   });
 
-  constructor(private remoteTodoDataSource: RemoteTodoDataSource) {}
+  constructor(
+    private remoteTodoDataSource: RemoteTodoDataSource,
+    private localTodoListDataSource: LocalTodoListDataSource,
+    private localTodoDataSource: LocalTodoDataSource,
+  ) {}
 
   async loadAllTodos(): Promise<void> {
     this.#emitTodoListState({ loading: true });
 
     const todos = await this.remoteTodoDataSource.getAllTodos();
+
+    // local update
+    this.localTodoListDataSource.setTodoList(todos);
+
+    const currentTodo = this.localTodoDataSource.getTodo();
+
+    if (currentTodo) {
+      const todo = todos.find(t => t.id === currentTodo.id);
+
+      if (todo) {
+        this.localTodoDataSource.setTodoIfMatchesCurrentId(todo);
+      }
+    }
 
     this.#emitTodoListState({ data: todos, loading: false });
   }
@@ -32,7 +48,9 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
 
     const todo = await this.remoteTodoDataSource.getTodoById(id);
 
-    this.#emitTodoState({ data: todo, loading: false });
+    this.localTodoDataSource.setTodo(todo);
+
+    this.#emitTodoState({ data: this.localTodoDataSource.getTodo(), loading: false });
   }
 
   async create(todo: todoCore.entities.Todo): Promise<void> {
@@ -40,8 +58,10 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
 
     await this.remoteTodoDataSource.createTodo(todo);
 
+    this.localTodoListDataSource.createToDo(todo);
+
     // local update
-    this.#emitTodoListState({ loading: false, data: [...(this.todoListState$.getValue().data || []), todo] });
+    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
   }
 
   async update(todo: todoCore.entities.Todo): Promise<void> {
@@ -50,37 +70,30 @@ export class TodoRepositoryImpl implements todoCore.repositories.TodoRepository 
     await this.remoteTodoDataSource.updateTodo(todo);
 
     // local update
-    const todos = this.todoListState$.getValue().data || [];
-    const index = todos.findIndex(t => t.id === todo.id);
-    todos[index] = todo;
+    this.localTodoListDataSource.updateTodo(todo);
 
-    this.#emitTodoListState({ loading: false, data: todos });
+    this.localTodoDataSource.setTodoIfMatchesCurrentId(todo);
+
+    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
+    this.#emitTodoState({ data: this.localTodoDataSource.getTodo() });
   }
 
   async reorder(from: number, to: number): Promise<void> {
     this.#emitTodoListState({ loading: true });
-
     await this.remoteTodoDataSource.reorderTodo(from, to);
 
     // local update
-    const todos = this.todoListState$.getValue().data || [];
-    const todo = todos.splice(from, 1)[0];
-    todos.splice(to, 0, todo);
-
-    this.#emitTodoListState({ loading: false, data: todos });
+    this.localTodoListDataSource.reorderTodo(from, to);
+    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
   }
 
   async delete(id: number): Promise<void> {
     this.#emitTodoListState({ loading: true });
-
     await this.remoteTodoDataSource.deleteTodo(id);
 
     // local update
-    const todos = this.todoListState$.getValue().data || [];
-    const index = todos.findIndex(t => t.id === id);
-    todos.splice(index, 1);
-
-    this.#emitTodoListState({ loading: false, data: todos });
+    this.localTodoListDataSource.deleteTodo(id);
+    this.#emitTodoListState({ loading: false, data: this.localTodoListDataSource.getTodoList() });
   }
 
   #emitTodoListState(newState: Partial<todoCore.repositories.TodoListState>) {

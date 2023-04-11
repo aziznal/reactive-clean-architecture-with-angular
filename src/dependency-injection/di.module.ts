@@ -1,22 +1,35 @@
 import { NgModule, Provider } from '@angular/core';
 import { todoCore as todoCore } from '@core';
 import { todoData as todoData } from '@data';
-
 const providers: Provider[] = [
   // Data Source injections
   {
     provide: todoData.dataSources.RemoteTodoDataSource,
     useFactory: () => new todoData.dataSources.RemoteTodoDataSourceImpl(),
   },
+  {
+    provide: todoData.dataSources.LocalTodoListDataSource,
+    useFactory: () => new todoData.dataSources.LocalTodoListDataSourceImpl(),
+  },
+  {
+    provide: todoData.dataSources.LocalTodoDataSource,
+    useFactory: () => new todoData.dataSources.LocalTodoDataSourceImpl(),
+  },
 
   // Repository injections
   {
     provide: todoCore.repositories.TodoRepository,
-    useFactory: (remoteDataSource: todoData.dataSources.RemoteTodoDataSource) =>
-      new todoData.repositories.TodoRepositoryImpl(remoteDataSource),
-    deps: [todoData.dataSources.RemoteTodoDataSource],
+    useFactory: (
+      remoteDataSource: todoData.dataSources.RemoteTodoDataSource,
+      localListDataSource: todoData.dataSources.LocalTodoListDataSource,
+      localDataSource: todoData.dataSources.LocalTodoDataSource,
+    ) => new todoData.repositories.TodoRepositoryImpl(remoteDataSource, localListDataSource, localDataSource),
+    deps: [
+      todoData.dataSources.RemoteTodoDataSource,
+      todoData.dataSources.LocalTodoListDataSource,
+      todoData.dataSources.LocalTodoDataSource,
+    ],
   },
-
   // Usecase injections
   {
     provide: todoCore.usecases.GetTodoListUsecase,
@@ -49,7 +62,6 @@ const providers: Provider[] = [
     deps: [todoCore.repositories.TodoRepository],
   },
 ];
-
 @NgModule()
 export class DependencyInjectionModule {
   static forRoot() {
